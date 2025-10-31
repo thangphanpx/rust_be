@@ -10,14 +10,14 @@ use crate::{
     database::models::User,
     models::{
         requests::{CreateUserRequest, PaginationParams, UpdateUserRequest},
-        responses::{ApiResponse, PaginatedResponse, UserResponse},
+        responses::{ApiResponse, PaginatedUserResponse, UserResponse},
     },
 };
 
 /// Create a new user
 #[utoipa::path(
     post,
-    path = "/users",
+    path = "/api/users",
     request_body = CreateUserRequest,
     responses(
         (status = 201, description = "User created successfully", body = UserApiResponse),
@@ -93,7 +93,7 @@ pub async fn create_user(
 /// Get all users with pagination
 #[utoipa::path(
     get,
-    path = "/users",
+    path = "/api/users",
     params(PaginationParams),
     responses(
         (status = 200, description = "List of users", body = UsersApiResponse)
@@ -103,7 +103,7 @@ pub async fn create_user(
 pub async fn get_users(
     State(state): State<AppState>,
     Query(params): Query<PaginationParams>,
-) -> Result<Json<ApiResponse<PaginatedResponse<UserResponse>>>, StatusCode> {
+) -> Result<Json<ApiResponse<PaginatedUserResponse>>, StatusCode> {
     let page = params.page.unwrap_or(1);
     let limit = params.limit.unwrap_or(10);
     let offset = (page - 1) * limit;
@@ -144,7 +144,7 @@ pub async fn get_users(
         })
         .collect();
 
-    let response = PaginatedResponse {
+    let response = PaginatedUserResponse {
         data: user_responses,
         page,
         limit,
@@ -161,7 +161,7 @@ pub async fn get_users(
 /// Get user by ID
 #[utoipa::path(
     get,
-    path = "/users/{id}",
+    path = "/api/users/{id}",
     params(
         ("id" = i32, Path, description = "User ID")
     ),
@@ -209,7 +209,7 @@ pub async fn get_user_by_id(
 /// Update user by ID
 #[utoipa::path(
     put,
-    path = "/users/{id}",
+    path = "/api/users/{id}",
     params(
         ("id" = i32, Path, description = "User ID")
     ),
@@ -288,7 +288,7 @@ pub async fn update_user(
 /// Delete user by ID
 #[utoipa::path(
     delete,
-    path = "/users/{id}",
+    path = "/api/users/{id}",
     params(
         ("id" = i32, Path, description = "User ID")
     ),

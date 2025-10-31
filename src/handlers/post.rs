@@ -8,7 +8,7 @@ use validator::Validate;
 use crate::{
     database::models::Post,
     models::{
-        responses::{ApiResponse, PaginatedResponse, PostResponse},
+        responses::{ApiResponse, PaginatedPostResponse, PostResponse},
         requests::{CreatePostRequest, PaginationParams, UpdatePostRequest},
     },
     AppState,
@@ -17,7 +17,7 @@ use crate::{
 /// Create a new post
 #[utoipa::path(
     post,
-    path = "/posts",
+    path = "/api/posts",
     request_body = CreatePostRequest,
     responses(
         (status = 201, description = "Post created successfully", body = PostApiResponse),
@@ -79,7 +79,7 @@ pub async fn create_post(
 /// Get all posts with pagination
 #[utoipa::path(
     get,
-    path = "/posts",
+    path = "/api/posts",
     params(PaginationParams),
     responses(
         (status = 200, description = "List of posts", body = PostsApiResponse)
@@ -89,7 +89,7 @@ pub async fn create_post(
 pub async fn get_posts(
     State(state): State<AppState>,
     Query(params): Query<PaginationParams>,
-) -> Result<Json<ApiResponse<PaginatedResponse<PostResponse>>>, StatusCode> {
+) -> Result<Json<ApiResponse<PaginatedPostResponse>>, StatusCode> {
     let page = params.page.unwrap_or(1);
     let limit = params.limit.unwrap_or(10);
     let offset = (page - 1) * limit;
@@ -131,7 +131,7 @@ pub async fn get_posts(
 
     let total_pages = (total as f64 / limit as f64).ceil() as u64;
 
-    let response = PaginatedResponse {
+    let response = PaginatedPostResponse {
         data: post_responses,
         page,
         limit,
@@ -148,7 +148,7 @@ pub async fn get_posts(
 /// Get post by ID
 #[utoipa::path(
     get,
-    path = "/posts/{id}",
+    path = "/api/posts/{id}",
     params(
         ("id" = i32, Path, description = "Post ID")
     ),
@@ -196,7 +196,7 @@ pub async fn get_post_by_id(
 /// Update post by ID
 #[utoipa::path(
     put,
-    path = "/posts/{id}",
+    path = "/api/posts/{id}",
     params(
         ("id" = i32, Path, description = "Post ID")
     ),
@@ -281,7 +281,7 @@ pub async fn update_post(
 /// Delete post by ID
 #[utoipa::path(
     delete,
-    path = "/posts/{id}",
+    path = "/api/posts/{id}",
     params(
         ("id" = i32, Path, description = "Post ID")
     ),

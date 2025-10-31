@@ -2,6 +2,17 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+// Custom DateTime wrapper for OpenAPI
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(transparent)]
+pub struct ApiDateTime(#[schema(value_type = String, format = "date-time")] pub DateTime<Utc>);
+
+impl From<DateTime<Utc>> for ApiDateTime {
+    fn from(dt: DateTime<Utc>) -> Self {
+        Self(dt)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ApiResponse<T> {
     pub success: bool,
@@ -39,7 +50,7 @@ pub struct UserApiResponse {
 pub struct UsersApiResponse {
     pub success: bool,
     pub message: String,
-    pub data: Option<PaginatedResponse<UserResponse>>,
+    pub data: Option<PaginatedUserResponse>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -53,7 +64,7 @@ pub struct PostApiResponse {
 pub struct PostsApiResponse {
     pub success: bool,
     pub message: String,
-    pub data: Option<PaginatedResponse<PostResponse>>,
+    pub data: Option<PaginatedPostResponse>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -79,6 +90,25 @@ pub struct PaginatedResponse<T> {
     pub total_pages: u64,
 }
 
+// Concrete paginated response types
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct PaginatedUserResponse {
+    pub data: Vec<UserResponse>,
+    pub page: u64,
+    pub limit: u64,
+    pub total: u64,
+    pub total_pages: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct PaginatedPostResponse {
+    pub data: Vec<PostResponse>,
+    pub page: u64,
+    pub limit: u64,
+    pub total: u64,
+    pub total_pages: u64,
+}
+
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct UserResponse {
     pub id: i32,
@@ -86,7 +116,9 @@ pub struct UserResponse {
     pub username: String,
     pub full_name: Option<String>,
     pub is_active: bool,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -97,7 +129,9 @@ pub struct PostResponse {
     pub content: String,
     pub user_id: i32,
     pub is_published: bool,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -108,7 +142,9 @@ pub struct PostWithUserResponse {
     pub content: String,
     pub user_id: i32,
     pub is_published: bool,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
     pub user: UserResponse,
 }
