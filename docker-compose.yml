@@ -1,0 +1,61 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: rust_be_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rust_be_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - rust_be_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Rust Backend Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rust_be_app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/rust_be_db
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 3000
+      JWT_SECRET: your-super-secret-jwt-key-here-change-this-in-production
+      RUST_LOG: debug
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - rust_be_network
+
+  # Redis (Optional - for caching/sessions)
+  redis:
+    image: redis:7-alpine
+    container_name: rust_be_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - rust_be_network
+    command: redis-server --requirepass password
+
+volumes:
+  postgres_data:
+
+networks:
+  rust_be_network:
+    driver: bridge

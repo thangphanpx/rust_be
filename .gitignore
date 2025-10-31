@@ -1,0 +1,29 @@
+/target/
+/Cargo.lock
+
+# Environment files
+.env
+.env.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database files
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# Docker
+.dockerignore
+
+# Backup files
+*.bak
