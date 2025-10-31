@@ -1,20 +1,22 @@
-use axum::{
-    routing::{delete, get, post, put},
-    Router,
-};
+use axum::Router;
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+mod api;
 mod config;
 mod database;
 mod handlers;
 mod models;
+mod routes;
+mod services;
 
 use config::AppState;
+use api::implement_apis::api_router;
 use handlers::{health, post, user};
+use routes::health::health_router;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -54,6 +56,7 @@ use handlers::{health, post, user};
     tags(
         (name = "Users", description = "User management endpoints"),
         (name = "Posts", description = "Post management endpoints"),
+        (name = "Productions", description = "Production management endpoints"),
         (name = "Health", description = "Health check endpoints")
     ),
     info(
@@ -81,22 +84,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config,
     };
 
-    // Build our application with routes
+    // Build our application with centralized routes
     let app = Router::new()
-        // User routes
-        .route("/api/users", post(user::create_user))
-        .route("/api/users", get(user::get_users))
-        .route("/api/users/:id", get(user::get_user_by_id))
-        .route("/api/users/:id", put(user::update_user))
-        .route("/api/users/:id", delete(user::delete_user))
-        // Post routes
-        .route("/api/posts", post(post::create_post))
-        .route("/api/posts", get(post::get_posts))
-        .route("/api/posts/:id", get(post::get_post_by_id))
-        .route("/api/posts/:id", put(post::update_post))
-        .route("/api/posts/:id", delete(post::delete_post))
+        // API routes với prefix /api
+        .nest("/api", api_router())
         // Health check
-        .route("/health", get(health::health_check))
+        .nest("/health", health_router())
         // Swagger UI
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         // Add CORS layer
