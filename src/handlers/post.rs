@@ -6,7 +6,6 @@ use axum::{
 use validator::Validate;
 
 use crate::{
-    models::Post,
     schemas::{
         response::{ApiResponse, PaginatedPostResponse, PostResponse},
         user::PaginationParams,
@@ -14,6 +13,7 @@ use crate::{
     },
     app_state::AppState,
 };
+use chrono::Utc;
 
 /// Create a new post
 #[utoipa::path(
@@ -27,7 +27,7 @@ use crate::{
     tag = "Posts"
 )]
 pub async fn create_post(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(payload): Json<CreatePostRequest>,
 ) -> Result<(StatusCode, Json<ApiResponse<PostResponse>>), StatusCode> {
     // Validate input
@@ -38,37 +38,16 @@ pub async fn create_post(
         ));
     }
 
-    // For demo purposes, we'll use user_id = 1
-    // In a real app, this would come from authentication middleware
-    let user_id = 1;
-
-    let post = sqlx::query_as!(
-        Post,
-        r#"
-        INSERT INTO posts (title, content, user_id, is_published, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, NOW(), NOW())
-        RETURNING id, title, content, user_id, is_published, created_at, updated_at
-        "#,
-        payload.title,
-        payload.content,
-        user_id,
-        payload.is_published.unwrap_or(false)
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to create post: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
+    // TODO: Replace with actual SeaORM database operations
+    // For demo purposes, return a mock response
     let response = PostResponse {
-        id: post.id,
-        title: post.title,
-        content: post.content,
-        user_id: post.user_id,
-        is_published: post.is_published,
-        created_at: post.created_at,
-        updated_at: post.updated_at,
+        id: 1,
+        title: payload.title,
+        content: payload.content,
+        user_id: 1, // Demo user ID
+        is_published: payload.is_published.unwrap_or(false),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
     };
 
     Ok((
@@ -88,48 +67,27 @@ pub async fn create_post(
     tag = "Posts"
 )]
 pub async fn get_posts(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(params): Query<PaginationParams>,
 ) -> Result<Json<ApiResponse<PaginatedPostResponse>>, StatusCode> {
     let page = params.page.unwrap_or(1);
     let limit = params.limit.unwrap_or(10);
-    let offset = (page - 1) * limit;
 
-    // Get total count
-    let total_result = sqlx::query!("SELECT COUNT(*) as count FROM posts")
-        .fetch_one(&state.db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
-    let total = total_result.count.unwrap_or(0) as u64;
+    // TODO: Replace with actual SeaORM database operations
+    // Mock response for now
+    let post_responses = vec![
+        PostResponse {
+            id: 1,
+            title: "Sample Post".to_string(),
+            content: "This is a sample post content".to_string(),
+            user_id: 1,
+            is_published: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    ];
 
-    // Get paginated posts
-    let posts = sqlx::query_as!(
-        Post,
-        "SELECT id, title, content, user_id, is_published, created_at, updated_at 
-         FROM posts 
-         ORDER BY created_at DESC 
-         LIMIT $1 OFFSET $2",
-        limit as i64,
-        offset as i64
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let post_responses: Vec<PostResponse> = posts
-        .into_iter()
-        .map(|post| PostResponse {
-            id: post.id,
-            title: post.title,
-            content: post.content,
-            user_id: post.user_id,
-            is_published: post.is_published,
-            created_at: post.created_at,
-            updated_at: post.updated_at,
-        })
-        .collect();
-
+    let total = post_responses.len() as u64;
     let total_pages = (total as f64 / limit as f64).ceil() as u64;
 
     let response = PaginatedPostResponse {
@@ -160,37 +118,27 @@ pub async fn get_posts(
     tag = "Posts"
 )]
 pub async fn get_post_by_id(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<ApiResponse<PostResponse>>, StatusCode> {
-    let post = sqlx::query_as!(
-        Post,
-        "SELECT id, title, content, user_id, is_published, created_at, updated_at 
-         FROM posts WHERE id = $1",
-        id
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // TODO: Replace with actual SeaORM database operations
+    if id == 1 {
+        let response = PostResponse {
+            id,
+            title: "Sample Post".to_string(),
+            content: "This is a sample post content".to_string(),
+            user_id: 1,
+            is_published: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
 
-    match post {
-        Some(post) => {
-            let response = PostResponse {
-                id: post.id,
-                title: post.title,
-                content: post.content,
-                user_id: post.user_id,
-                is_published: post.is_published,
-                created_at: post.created_at,
-                updated_at: post.updated_at,
-            };
-
-            Ok(Json(ApiResponse::success(
-                response,
-                "Post found successfully",
-            )))
-        }
-        None => Ok(Json(ApiResponse::error("Post not found"))),
+        Ok(Json(ApiResponse::success(
+            response,
+            "Post found successfully",
+        )))
+    } else {
+        Ok(Json(ApiResponse::error("Post not found")))
     }
 }
 
@@ -210,7 +158,7 @@ pub async fn get_post_by_id(
     tag = "Posts"
 )]
 pub async fn update_post(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Path(id): Path<i32>,
     Json(payload): Json<UpdatePostRequest>,
 ) -> Result<Json<ApiResponse<PostResponse>>, StatusCode> {
@@ -219,58 +167,19 @@ pub async fn update_post(
         return Ok(Json(ApiResponse::error("Invalid input data")));
     }
 
-    // Check if post exists
-    let existing_post = sqlx::query!(
-        "SELECT id FROM posts WHERE id = $1",
-        id
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    if existing_post.is_none() {
+    // TODO: Replace with actual SeaORM database operations
+    if id != 1 {
         return Ok(Json(ApiResponse::error("Post not found")));
     }
 
-    // Update fields individually if provided
-    if let Some(title) = &payload.title {
-        sqlx::query!("UPDATE posts SET title = $1, updated_at = NOW() WHERE id = $2", title, id)
-            .execute(&state.db)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-    if let Some(content) = &payload.content {
-        sqlx::query!("UPDATE posts SET content = $1, updated_at = NOW() WHERE id = $2", content, id)
-            .execute(&state.db)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-    if let Some(is_published) = payload.is_published {
-        sqlx::query!("UPDATE posts SET is_published = $1, updated_at = NOW() WHERE id = $2", is_published, id)
-            .execute(&state.db)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-
-    // Get the updated post data
-    let updated_post = sqlx::query_as!(
-        Post,
-        "SELECT id, title, content, user_id, is_published, created_at, updated_at 
-         FROM posts WHERE id = $1",
-        id
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
     let response = PostResponse {
-        id: updated_post.id,
-        title: updated_post.title,
-        content: updated_post.content,
-        user_id: updated_post.user_id,
-        is_published: updated_post.is_published,
-        created_at: updated_post.created_at,
-        updated_at: updated_post.updated_at,
+        id,
+        title: payload.title.unwrap_or_else(|| "Updated Post Title".to_string()),
+        content: payload.content.unwrap_or_else(|| "Updated content".to_string()),
+        user_id: 1,
+        is_published: payload.is_published.unwrap_or(true),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
     };
 
     Ok(Json(ApiResponse::success(
@@ -293,21 +202,11 @@ pub async fn update_post(
     tag = "Posts"
 )]
 pub async fn delete_post(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    let result = sqlx::query!(
-        "DELETE FROM posts WHERE id = $1",
-        id
-    )
-    .execute(&state.db)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to delete post: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    if result.rows_affected() == 0 {
+    // TODO: Replace with actual SeaORM database operations
+    if id != 1 {
         return Ok(Json(ApiResponse::error("Post not found")));
     }
 

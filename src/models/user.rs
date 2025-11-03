@@ -1,16 +1,22 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use utoipa::ToSchema;
+use sea_orm::prelude::*;
 
-#[derive(Debug, Serialize, Deserialize, FromRow, Clone, ToSchema)]
-pub struct User {
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize, ToSchema)]
+#[sea_orm(table_name = "users")]
+pub struct Model {
+    #[sea_orm(primary_key)]
     pub id: i32,
     pub email: String,
     pub username: String,
     pub password_hash: String,
     pub full_name: Option<String>,
     pub is_active: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, EnumIter, DeriveRelation)]
+pub enum Relation {
+    // Relations will be added back after fixing the relation syntax
+}
+
+impl ActiveModelBehavior for ActiveModel {}

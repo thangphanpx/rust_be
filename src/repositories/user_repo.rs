@@ -1,5 +1,5 @@
-use sqlx::PgPool;
-use crate::models::User;
+use sea_orm::{DatabaseConnection, DbErr, EntityTrait, ActiveModelTrait, IntoActiveModel, QuerySelect, PaginatorTrait, ModelTrait};
+use crate::models::user::{self, Model as UserModel};
 use crate::schemas::{CreateUserRequest, UpdateUserRequest};
 
 #[derive(Debug)]
@@ -8,95 +8,91 @@ pub struct UserRepository;
 
 #[allow(dead_code)]
 impl UserRepository {
-    pub async fn create(pool: &PgPool, user_data: &CreateUserRequest) -> Result<User, sqlx::Error> {
-        let user = sqlx::query_as!(
-            User,
-            r#"
-            INSERT INTO users (email, username, password_hash, full_name)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, email, username, password_hash, full_name, is_active, created_at, updated_at
-            "#,
-            user_data.email,
-            user_data.username,
-            user_data.password, // Note: In real app, this should be hashed
-            user_data.full_name
-        )
-        .fetch_one(pool)
+    pub async fn create(db: &DatabaseConnection, user_data: &CreateUserRequest) -> Result<UserModel, DbErr> {
+        // TODO: Implement actual password hashing
+        // In a real implementation, you would hash the password here
+        
+        let user = user::ActiveModel {
+            email: sea_orm::Set(user_data.email.clone()),
+            username: sea_orm::Set(user_data.username.clone()),
+            password_hash: sea_orm::Set(user_data.password.clone()), // Should be hashed
+            full_name: sea_orm::Set(user_data.full_name.clone()),
+            is_active: sea_orm::Set(true),
+            ..Default::default()
+        }
+        .insert(db)
         .await?;
 
         Ok(user)
     }
 
-    pub async fn find_all(pool: &PgPool, page: u64, limit: u64) -> Result<Vec<User>, sqlx::Error> {
+    pub async fn find_all(db: &DatabaseConnection, page: u64, limit: u64) -> Result<Vec<UserModel>, DbErr> {
         let offset = (page - 1) * limit;
         
-        let users = sqlx::query_as!(
-            User,
-            "SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-            limit as i64,
-            offset as i64
-        )
-        .fetch_all(pool)
-        .await?;
+        let users = user::Entity::find()
+            .limit(limit)
+            .offset(offset)
+            .all(db)
+            .await?;
 
         Ok(users)
     }
 
-    pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<User>, sqlx::Error> {
-        let user = sqlx::query_as!(
-            User,
-            "SELECT * FROM users WHERE id = $1",
-            id
-        )
-        .fetch_optional(pool)
-        .await?;
+    pub async fn find_by_id(db: &DatabaseConnection, id: i32) -> Result<Option<UserModel>, DbErr> {
+        let user = user::Entity::find_by_id(id)
+            .one(db)
+            .await?;
 
         Ok(user)
     }
 
-    pub async fn update(pool: &PgPool, id: i32, user_data: &UpdateUserRequest) -> Result<Option<User>, sqlx::Error> {
-        let user = sqlx::query_as!(
-            User,
-            r#"
-            UPDATE users 
-            SET email = COALESCE($2, email),
-                username = COALESCE($3, username),
-                full_name = COALESCE($4, full_name),
-                is_active = COALESCE($5, is_active),
-                updated_at = NOW()
-            WHERE id = $1
-            RETURNING id, email, username, password_hash, full_name, is_active, created_at, updated_at
-            "#,
-            id,
-            user_data.email,
-            user_data.username,
-            user_data.full_name,
-            user_data.is_active
-        )
-        .fetch_optional(pool)
-        .await?;
+    pub async fn update(db: &DatabaseConnection, id: i32, user_data: &UpdateUserRequest) -> Result<Option<UserModel>, DbErr> {
+        // First check if user exists
+        let existing_user = user::Entity::find_by_id(id)
+            .one(db)
+            .await?;
+        
+        if let Some(user) = existing_user {
+            let mut user_model = user.into_active_model();
+            
+            if let Some(email) = &user_data.email {
+                user_model.email = sea_orm::Set(email.clone());
+            }
+            if let Some(username) = &user_data.username {
+                user_model.username = sea_orm::Set(username.clone());
+            }
+            if let Some(full_name) = &user_data.full_name {
+                user_model.full_name = sea_orm::Set(Some(full_name.clone()));
+            }
+            if let Some(is_active) = user_data.is_active {
+                user_model.is_active = sea_orm::Set(is_active);
+            }
 
-        Ok(user)
+            let updated_user = user_model.update(db).await?;
+            Ok(Some(updated_user))
+        } else {
+            Ok(None)
+        }
     }
 
-    pub async fn delete(pool: &PgPool, id: i32) -> Result<bool, sqlx::Error> {
-        let result = sqlx::query!(
-            "DELETE FROM users WHERE id = $1",
-            id
-        )
-        .execute(pool)
-        .await?;
-
-        Ok(result.rows_affected() > 0)
+    pub async fn delete(db: &DatabaseConnection, id: i32) -> Result<bool, DbErr> {
+        let user = user::Entity::find_by_id(id)
+            .one(db)
+            .await?;
+            
+        if let Some(user_model) = user {
+            user_model.delete(db).await?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
-    pub async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
-        let count = sqlx::query_scalar!(
-            "SELECT COUNT(*) FROM users"
-        )
-        .fetch_one(pool)
-        .await?;
+    pub async fn count(db: &DatabaseConnection) -> Result<i64, DbErr> {
+        let count = user::Entity::find()
+            .count(db)
+            .await? as i64;
 
-        Ok(count.unwrap_or(0))
+        Ok(count)
     }
 }

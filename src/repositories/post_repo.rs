@@ -1,5 +1,5 @@
-use sqlx::PgPool;
-use crate::models::Post;
+use sea_orm::{DatabaseConnection, DbErr, EntityTrait, ActiveModelTrait, IntoActiveModel, QuerySelect, PaginatorTrait, ModelTrait};
+use crate::models::post::{self, Model as PostModel};
 use crate::schemas::{CreatePostRequest, UpdatePostRequest};
 
 #[derive(Debug)]
@@ -8,93 +8,84 @@ pub struct PostRepository;
 
 #[allow(dead_code)]
 impl PostRepository {
-    pub async fn create(pool: &PgPool, user_id: i32, post_data: &CreatePostRequest) -> Result<Post, sqlx::Error> {
-        let post = sqlx::query_as!(
-            Post,
-            r#"
-            INSERT INTO posts (title, content, user_id, is_published)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, title, content, user_id, is_published, created_at, updated_at
-            "#,
-            post_data.title,
-            post_data.content,
-            user_id,
-            post_data.is_published.unwrap_or(false)
-        )
-        .fetch_one(pool)
+    pub async fn create(db: &DatabaseConnection, user_id: i32, post_data: &CreatePostRequest) -> Result<PostModel, DbErr> {
+        let post = post::ActiveModel {
+            title: sea_orm::Set(post_data.title.clone()),
+            content: sea_orm::Set(post_data.content.clone()),
+            user_id: sea_orm::Set(user_id),
+            is_published: sea_orm::Set(post_data.is_published.unwrap_or(false)),
+            ..Default::default()
+        }
+        .insert(db)
         .await?;
 
         Ok(post)
     }
 
-    pub async fn find_all(pool: &PgPool, page: u64, limit: u64) -> Result<Vec<Post>, sqlx::Error> {
+    pub async fn find_all(db: &DatabaseConnection, page: u64, limit: u64) -> Result<Vec<PostModel>, DbErr> {
         let offset = (page - 1) * limit;
         
-        let posts = sqlx::query_as!(
-            Post,
-            "SELECT * FROM posts ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-            limit as i64,
-            offset as i64
-        )
-        .fetch_all(pool)
-        .await?;
+        let posts = post::Entity::find()
+            .limit(limit)
+            .offset(offset)
+            .all(db)
+            .await?;
 
         Ok(posts)
     }
 
-    pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Post>, sqlx::Error> {
-        let post = sqlx::query_as!(
-            Post,
-            "SELECT * FROM posts WHERE id = $1",
-            id
-        )
-        .fetch_optional(pool)
-        .await?;
+    pub async fn find_by_id(db: &DatabaseConnection, id: i32) -> Result<Option<PostModel>, DbErr> {
+        let post = post::Entity::find_by_id(id)
+            .one(db)
+            .await?;
 
         Ok(post)
     }
 
-    pub async fn update(pool: &PgPool, id: i32, post_data: &UpdatePostRequest) -> Result<Option<Post>, sqlx::Error> {
-        let post = sqlx::query_as!(
-            Post,
-            r#"
-            UPDATE posts 
-            SET title = COALESCE($2, title),
-                content = COALESCE($3, content),
-                is_published = COALESCE($4, is_published),
-                updated_at = NOW()
-            WHERE id = $1
-            RETURNING id, title, content, user_id, is_published, created_at, updated_at
-            "#,
-            id,
-            post_data.title,
-            post_data.content,
-            post_data.is_published
-        )
-        .fetch_optional(pool)
-        .await?;
+    pub async fn update(db: &DatabaseConnection, id: i32, post_data: &UpdatePostRequest) -> Result<Option<PostModel>, DbErr> {
+        // First check if post exists
+        let existing_post = post::Entity::find_by_id(id)
+            .one(db)
+            .await?;
+        
+        if let Some(post) = existing_post {
+            let mut post_model = post.into_active_model();
+            
+            if let Some(title) = &post_data.title {
+                post_model.title = sea_orm::Set(title.clone());
+            }
+            if let Some(content) = &post_data.content {
+                post_model.content = sea_orm::Set(content.clone());
+            }
+            if let Some(is_published) = post_data.is_published {
+                post_model.is_published = sea_orm::Set(is_published);
+            }
 
-        Ok(post)
+            let updated_post = post_model.update(db).await?;
+            Ok(Some(updated_post))
+        } else {
+            Ok(None)
+        }
     }
 
-    pub async fn delete(pool: &PgPool, id: i32) -> Result<bool, sqlx::Error> {
-        let result = sqlx::query!(
-            "DELETE FROM posts WHERE id = $1",
-            id
-        )
-        .execute(pool)
-        .await?;
-
-        Ok(result.rows_affected() > 0)
+    pub async fn delete(db: &DatabaseConnection, id: i32) -> Result<bool, DbErr> {
+        let post = post::Entity::find_by_id(id)
+            .one(db)
+            .await?;
+            
+        if let Some(post_model) = post {
+            post_model.delete(db).await?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
-    pub async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
-        let count = sqlx::query_scalar!(
-            "SELECT COUNT(*) FROM posts"
-        )
-        .fetch_one(pool)
-        .await?;
+    pub async fn count(db: &DatabaseConnection) -> Result<i64, DbErr> {
+        let count = post::Entity::find()
+            .count(db)
+            .await? as i64;
 
-        Ok(count.unwrap_or(0))
+        Ok(count)
     }
 }
