@@ -4,19 +4,39 @@ use tower_http::cors::CorsLayer;
 use tracing_subscriber;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+use sqlx::{postgres::PgPoolOptions, PgPool};
 
-mod api;
+mod app_state;
 mod config;
-mod database;
+mod error;
 mod handlers;
+mod middleware;
 mod models;
+mod repositories;
 mod routes;
+mod schemas;
 mod services;
+mod utils;
 
-use config::AppState;
-use api::implement_apis::api_router;
+use app_state::AppState;
+use config::load_config;
 use handlers::{health, post, user};
-use routes::health::health_router;
+use routes::{health::health_router, user_router, post_router};
+
+// Database connection function
+async fn create_database_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    PgPoolOptions::new()
+        .max_connections(10)
+        .connect(database_url)
+        .await
+}
+
+// Create API routes
+fn create_api_routes() -> Router<AppState> {
+    Router::new()
+        .nest("/users", user_router())
+        .nest("/posts", post_router())
+}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -35,28 +55,27 @@ use routes::health::health_router;
     ),
     components(
         schemas(
-            models::requests::CreateUserRequest,
-            models::requests::UpdateUserRequest,
-            models::requests::CreatePostRequest,
-            models::requests::UpdatePostRequest,
-            models::requests::PaginationParams,
-            models::responses::UserResponse,
-            models::responses::PostResponse,
-            models::responses::PostWithUserResponse,
-            models::responses::PaginatedUserResponse,
-            models::responses::PaginatedPostResponse,
-            models::responses::UserApiResponse,
-            models::responses::UsersApiResponse,
-            models::responses::PostApiResponse,
-            models::responses::PostsApiResponse,
-            models::responses::StringApiResponse,
-            models::responses::HealthApiResponse,
+            schemas::CreateUserRequest,
+            schemas::UpdateUserRequest,
+            schemas::CreatePostRequest,
+            schemas::UpdatePostRequest,
+            schemas::PaginationParams,
+            schemas::UserResponse,
+            schemas::PostResponse,
+            schemas::PostWithUserResponse,
+            schemas::PaginatedUserResponse,
+            schemas::PaginatedPostResponse,
+            schemas::UserApiResponse,
+            schemas::UsersApiResponse,
+            schemas::PostApiResponse,
+            schemas::PostsApiResponse,
+            schemas::StringApiResponse,
+            schemas::HealthApiResponse,
         )
     ),
     tags(
         (name = "Users", description = "User management endpoints"),
         (name = "Posts", description = "Post management endpoints"),
-        (name = "Productions", description = "Production management endpoints"),
         (name = "Health", description = "Health check endpoints")
     ),
     info(
@@ -73,10 +92,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     // Load configuration
-    let config = config::load_config()?;
+    let config = load_config()?;
     
     // Initialize database connection
-    let db_pool = database::connection::create_pool(&config.database_url).await?;
+    let db_pool = create_database_pool(&config.database_url).await?;
 
     // Create application state
     let app_state = AppState {
@@ -84,10 +103,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config,
     };
 
-    // Build our application with centralized routes
+    // Build our application with routes
     let app = Router::new()
-        // API routes với prefix /api
-        .nest("/api", api_router())
+        // API routes
+        .nest("/api", create_api_routes())
         // Health check
         .nest("/health", health_router())
         // Swagger UI

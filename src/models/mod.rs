@@ -1,5 +1,5 @@
-pub mod requests;
-pub mod responses;
+pub mod user;
+pub mod post;
 
-pub use requests::*;
-pub use responses::*;
+pub use user::*;
+pub use post::*;

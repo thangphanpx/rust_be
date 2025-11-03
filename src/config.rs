@@ -1,18 +1,14 @@
 use serde::Deserialize;
-use sqlx::PgPool;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
     pub database_url: String,
+    #[allow(dead_code)]
     pub server_host: String,
+    #[allow(dead_code)]
     pub server_port: u16,
+    #[allow(dead_code)]
     pub jwt_secret: String,
-}
-
-#[derive(Clone)]
-pub struct AppState {
-    pub db: PgPool,
-    pub config: AppConfig,
 }
 
 impl AppConfig {
@@ -27,6 +23,7 @@ impl AppConfig {
         })
     }
     
+    #[allow(dead_code)]
     pub fn server_address(&self) -> String {
         format!("{}:{}", self.server_host, self.server_port)
     }

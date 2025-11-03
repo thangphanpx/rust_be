@@ -1,6 +1,6 @@
 use axum::{response::Json, routing::get, Router};
 
-use crate::{config::AppState, models::responses::ApiResponse};
+use crate::{app_state::AppState, schemas::ApiResponse};
 
 /// Health check endpoint
 #[utoipa::path(

@@ -6,12 +6,13 @@ use axum::{
 use validator::Validate;
 
 use crate::{
-    database::models::Post,
-    models::{
-        responses::{ApiResponse, PaginatedPostResponse, PostResponse},
-        requests::{CreatePostRequest, PaginationParams, UpdatePostRequest},
+    models::Post,
+    schemas::{
+        response::{ApiResponse, PaginatedPostResponse, PostResponse},
+        user::PaginationParams,
+        post::{CreatePostRequest, UpdatePostRequest},
     },
-    AppState,
+    app_state::AppState,
 };
 
 /// Create a new post

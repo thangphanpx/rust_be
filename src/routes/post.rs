@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 
-use crate::{config::AppState, handlers::post};
+use crate::{app_state::AppState, handlers::post};
 
 pub fn post_router() -> Router<AppState> {
     Router::new()

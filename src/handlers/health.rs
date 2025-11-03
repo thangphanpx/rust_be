@@ -1,8 +1,9 @@
 use axum::Json;
 
-use crate::models::responses::ApiResponse;
+use crate::schemas::response::ApiResponse;
 
 /// Health check endpoint
+#[allow(dead_code)]
 #[utoipa::path(
     get,
     path = "/health",

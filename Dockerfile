@@ -16,6 +16,8 @@ COPY Cargo.toml ./
 # Copy source code
 COPY src ./src
 COPY migrations ./migrations
+
+# Copy SQLX query cache for offline builds
 COPY .sqlx ./.sqlx
 
 # Build the application

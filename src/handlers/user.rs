@@ -6,11 +6,11 @@ use axum::{
 use validator::Validate;
 
 use crate::{
-    config::AppState,
-    database::models::User,
-    models::{
-        requests::{CreateUserRequest, PaginationParams, UpdateUserRequest},
-        responses::{ApiResponse, PaginatedUserResponse, UserResponse},
+    app_state::AppState,
+    models::User,
+    schemas::{
+        response::{ApiResponse, PaginatedUserResponse, UserResponse},
+        user::{CreateUserRequest, PaginationParams, UpdateUserRequest},
     },
 };
 

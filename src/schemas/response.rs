@@ -2,17 +2,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-// Custom DateTime wrapper for OpenAPI
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(transparent)]
-pub struct ApiDateTime(#[schema(value_type = String, format = "date-time")] pub DateTime<Utc>);
-
-impl From<DateTime<Utc>> for ApiDateTime {
-    fn from(dt: DateTime<Utc>) -> Self {
-        Self(dt)
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ApiResponse<T> {
     pub success: bool,
@@ -81,16 +70,6 @@ pub struct HealthApiResponse {
     pub data: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct PaginatedResponse<T> {
-    pub data: Vec<T>,
-    pub page: u64,
-    pub limit: u64,
-    pub total: u64,
-    pub total_pages: u64,
-}
-
-// Concrete paginated response types
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PaginatedUserResponse {
     pub data: Vec<UserResponse>,
