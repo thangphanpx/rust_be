@@ -11,6 +11,7 @@ use crate::{
         user::{CreateUserRequest, PaginationParams, UpdateUserRequest},
     },
     app_state::AppState,
+    repositories::user_repo::UserRepository,
 };
 use chrono::Utc;
 
@@ -27,7 +28,7 @@ use chrono::Utc;
     tag = "Users"
 )]
 pub async fn create_user(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(payload): Json<CreateUserRequest>,
 ) -> Result<(StatusCode, Json<ApiResponse<UserResponse>>), StatusCode> {
     // Validate input
@@ -38,28 +39,31 @@ pub async fn create_user(
         ));
     }
 
-    // TODO: Replace with actual SeaORM database operations
-    // Check for duplicate email would be implemented here
+    // Create user in database
+    match UserRepository::create(&state.db, &payload).await {
+        Ok(user) => {
+            let response = UserResponse {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                full_name: user.full_name,
+                is_active: user.is_active,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
 
-    // Hash password for demo (in real implementation)
-    // let password_hash = bcrypt::hash(&payload.password, 10)
-    //     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Mock response for demo
-    let response = UserResponse {
-        id: 1,
-        email: payload.email,
-        username: payload.username,
-        full_name: payload.full_name,
-        is_active: true,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
-
-    Ok((
-        StatusCode::CREATED,
-        Json(ApiResponse::success(response, "User created successfully")),
-    ))
+            Ok((
+                StatusCode::CREATED,
+                Json(ApiResponse::success(response, "User created successfully")),
+            ))
+        }
+        Err(_) => {
+            Ok((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Failed to create user")),
+            ))
+        }
+    }
 }
 
 /// Get all users with pagination
@@ -73,41 +77,52 @@ pub async fn create_user(
     tag = "Users"
 )]
 pub async fn get_users(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Query(params): Query<PaginationParams>,
 ) -> Result<Json<ApiResponse<PaginatedUserResponse>>, StatusCode> {
     let page = params.page.unwrap_or(1);
     let limit = params.limit.unwrap_or(10);
 
-    // TODO: Replace with actual SeaORM database operations
-    // Mock response for now
-    let user_responses = vec![
-        UserResponse {
-            id: 1,
-            email: "test@example.com".to_string(),
-            username: "testuser".to_string(),
-            full_name: Some("Test User".to_string()),
-            is_active: true,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+    // Get users from database
+    match UserRepository::find_all(&state.db, page, limit).await {
+        Ok(users) => {
+            let total = match UserRepository::count(&state.db).await {
+                Ok(count) => count as u64,
+                Err(_) => return Ok(Json(ApiResponse::error("Failed to get user count"))),
+            };
+
+            let total_pages = (total as f64 / limit as f64).ceil() as u64;
+
+            let user_responses: Vec<UserResponse> = users
+                .into_iter()
+                .map(|user| UserResponse {
+                    id: user.id,
+                    email: user.email,
+                    username: user.username,
+                    full_name: user.full_name,
+                    is_active: user.is_active,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                })
+                .collect();
+
+            let response = PaginatedUserResponse {
+                data: user_responses,
+                page,
+                limit,
+                total,
+                total_pages,
+            };
+
+            Ok(Json(ApiResponse::success(
+                response,
+                "Users retrieved successfully",
+            )))
         }
-    ];
-
-    let total = user_responses.len() as u64;
-    let total_pages = (total as f64 / limit as f64).ceil() as u64;
-
-    let response = PaginatedUserResponse {
-        data: user_responses,
-        page,
-        limit,
-        total,
-        total_pages,
-    };
-
-    Ok(Json(ApiResponse::success(
-        response,
-        "Users retrieved successfully",
-    )))
+        Err(_) => {
+            Ok(Json(ApiResponse::error("Failed to retrieve users")))
+        }
+    }
 }
 
 /// Get user by ID
@@ -124,27 +139,33 @@ pub async fn get_users(
     tag = "Users"
 )]
 pub async fn get_user_by_id(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<ApiResponse<UserResponse>>, StatusCode> {
-    // TODO: Replace with actual SeaORM database operations
-    if id == 1 {
-        let response = UserResponse {
-            id,
-            email: "test@example.com".to_string(),
-            username: "testuser".to_string(),
-            full_name: Some("Test User".to_string()),
-            is_active: true,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
+    // Get user from database
+    match UserRepository::find_by_id(&state.db, id).await {
+        Ok(Some(user)) => {
+            let response = UserResponse {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                full_name: user.full_name,
+                is_active: user.is_active,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
 
-        Ok(Json(ApiResponse::success(
-            response,
-            "User found successfully",
-        )))
-    } else {
-        Ok(Json(ApiResponse::error("User not found")))
+            Ok(Json(ApiResponse::success(
+                response,
+                "User found successfully",
+            )))
+        }
+        Ok(None) => {
+            Ok(Json(ApiResponse::error("User not found")))
+        }
+        Err(_) => {
+            Ok(Json(ApiResponse::error("Failed to retrieve user")))
+        }
     }
 }
 
@@ -164,7 +185,7 @@ pub async fn get_user_by_id(
     tag = "Users"
 )]
 pub async fn update_user(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateUserRequest>,
 ) -> Result<Json<ApiResponse<UserResponse>>, StatusCode> {
@@ -173,25 +194,31 @@ pub async fn update_user(
         return Ok(Json(ApiResponse::error("Invalid input data")));
     }
 
-    // TODO: Replace with actual SeaORM database operations
-    if id != 1 {
-        return Ok(Json(ApiResponse::error("User not found")));
+    // Update user in database
+    match UserRepository::update(&state.db, id, &payload).await {
+        Ok(Some(user)) => {
+            let response = UserResponse {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                full_name: user.full_name,
+                is_active: user.is_active,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
+
+            Ok(Json(ApiResponse::success(
+                response,
+                "User updated successfully",
+            )))
+        }
+        Ok(None) => {
+            Ok(Json(ApiResponse::error("User not found")))
+        }
+        Err(_) => {
+            Ok(Json(ApiResponse::error("Failed to update user")))
+        }
     }
-
-    let response = UserResponse {
-        id,
-        email: payload.email.unwrap_or_else(|| "updated@example.com".to_string()),
-        username: payload.username.unwrap_or_else(|| "updateduser".to_string()),
-        full_name: payload.full_name,
-        is_active: payload.is_active.unwrap_or(true),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
-
-    Ok(Json(ApiResponse::success(
-        response,
-        "User updated successfully",
-    )))
 }
 
 /// Delete user by ID
@@ -208,16 +235,22 @@ pub async fn update_user(
     tag = "Users"
 )]
 pub async fn delete_user(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    // TODO: Replace with actual SeaORM database operations
-    if id != 1 {
-        return Ok(Json(ApiResponse::error("User not found")));
+    // Delete user from database
+    match UserRepository::delete(&state.db, id).await {
+        Ok(true) => {
+            Ok(Json(ApiResponse::success(
+                "User deleted".to_string(),
+                "User deleted successfully",
+            )))
+        }
+        Ok(false) => {
+            Ok(Json(ApiResponse::<String>::error("User not found")))
+        }
+        Err(_) => {
+            Ok(Json(ApiResponse::<String>::error("Failed to delete user")))
+        }
     }
-
-    Ok(Json(ApiResponse::success(
-        "User deleted".to_string(),
-        "User deleted successfully",
-    )))
 }

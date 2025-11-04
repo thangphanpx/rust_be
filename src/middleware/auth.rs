@@ -6,7 +6,7 @@ use axum::{
 };
 
 use crate::app_state::AppState;
-use crate::error::AppError;
+use crate::core::error::AppError;
 use crate::utils::jwt::verify_jwt;
 
 #[allow(dead_code)]

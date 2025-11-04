@@ -12,6 +12,7 @@ use crate::{
         post::{CreatePostRequest, UpdatePostRequest},
     },
     app_state::AppState,
+    repositories::post_repo::PostRepository,
 };
 use chrono::Utc;
 
@@ -27,7 +28,7 @@ use chrono::Utc;
     tag = "Posts"
 )]
 pub async fn create_post(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(payload): Json<CreatePostRequest>,
 ) -> Result<(StatusCode, Json<ApiResponse<PostResponse>>), StatusCode> {
     // Validate input
@@ -38,22 +39,35 @@ pub async fn create_post(
         ));
     }
 
-    // TODO: Replace with actual SeaORM database operations
-    // For demo purposes, return a mock response
-    let response = PostResponse {
-        id: 1,
-        title: payload.title,
-        content: payload.content,
-        user_id: 1, // Demo user ID
-        is_published: payload.is_published.unwrap_or(false),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
+    // For demo purposes, use user_id = 1
+    // In a real app, this would come from authentication middleware
+    let user_id = 1;
 
-    Ok((
-        StatusCode::CREATED,
-        Json(ApiResponse::success(response, "Post created successfully")),
-    ))
+    // Create post in database
+    match PostRepository::create(&state.db, user_id, &payload).await {
+        Ok(post) => {
+            let response = PostResponse {
+                id: post.id,
+                title: post.title,
+                content: post.content,
+                user_id: post.user_id,
+                is_published: post.is_published,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
+
+            Ok((
+                StatusCode::CREATED,
+                Json(ApiResponse::success(response, "Post created successfully")),
+            ))
+        }
+        Err(_) => {
+            Ok((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("Failed to create post")),
+            ))
+        }
+    }
 }
 
 /// Get all posts with pagination
@@ -67,41 +81,52 @@ pub async fn create_post(
     tag = "Posts"
 )]
 pub async fn get_posts(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Query(params): Query<PaginationParams>,
 ) -> Result<Json<ApiResponse<PaginatedPostResponse>>, StatusCode> {
     let page = params.page.unwrap_or(1);
     let limit = params.limit.unwrap_or(10);
 
-    // TODO: Replace with actual SeaORM database operations
-    // Mock response for now
-    let post_responses = vec![
-        PostResponse {
-            id: 1,
-            title: "Sample Post".to_string(),
-            content: "This is a sample post content".to_string(),
-            user_id: 1,
-            is_published: true,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+    // Get posts from database
+    match PostRepository::find_all(&state.db, page, limit).await {
+        Ok(posts) => {
+            let total = match PostRepository::count(&state.db).await {
+                Ok(count) => count as u64,
+                Err(_) => return Ok(Json(ApiResponse::error("Failed to get post count"))),
+            };
+
+            let total_pages = (total as f64 / limit as f64).ceil() as u64;
+
+            let post_responses: Vec<PostResponse> = posts
+                .into_iter()
+                .map(|post| PostResponse {
+                    id: post.id,
+                    title: post.title,
+                    content: post.content,
+                    user_id: post.user_id,
+                    is_published: post.is_published,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                })
+                .collect();
+
+            let response = PaginatedPostResponse {
+                data: post_responses,
+                page,
+                limit,
+                total,
+                total_pages,
+            };
+
+            Ok(Json(ApiResponse::success(
+                response,
+                "Posts retrieved successfully",
+            )))
         }
-    ];
-
-    let total = post_responses.len() as u64;
-    let total_pages = (total as f64 / limit as f64).ceil() as u64;
-
-    let response = PaginatedPostResponse {
-        data: post_responses,
-        page,
-        limit,
-        total,
-        total_pages,
-    };
-
-    Ok(Json(ApiResponse::success(
-        response,
-        "Posts retrieved successfully",
-    )))
+        Err(_) => {
+            Ok(Json(ApiResponse::error("Failed to retrieve posts")))
+        }
+    }
 }
 
 /// Get post by ID
@@ -118,27 +143,33 @@ pub async fn get_posts(
     tag = "Posts"
 )]
 pub async fn get_post_by_id(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<ApiResponse<PostResponse>>, StatusCode> {
-    // TODO: Replace with actual SeaORM database operations
-    if id == 1 {
-        let response = PostResponse {
-            id,
-            title: "Sample Post".to_string(),
-            content: "This is a sample post content".to_string(),
-            user_id: 1,
-            is_published: true,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
+    // Get post from database
+    match PostRepository::find_by_id(&state.db, id).await {
+        Ok(Some(post)) => {
+            let response = PostResponse {
+                id: post.id,
+                title: post.title,
+                content: post.content,
+                user_id: post.user_id,
+                is_published: post.is_published,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
 
-        Ok(Json(ApiResponse::success(
-            response,
-            "Post found successfully",
-        )))
-    } else {
-        Ok(Json(ApiResponse::error("Post not found")))
+            Ok(Json(ApiResponse::success(
+                response,
+                "Post found successfully",
+            )))
+        }
+        Ok(None) => {
+            Ok(Json(ApiResponse::error("Post not found")))
+        }
+        Err(_) => {
+            Ok(Json(ApiResponse::error("Failed to retrieve post")))
+        }
     }
 }
 
@@ -158,7 +189,7 @@ pub async fn get_post_by_id(
     tag = "Posts"
 )]
 pub async fn update_post(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(payload): Json<UpdatePostRequest>,
 ) -> Result<Json<ApiResponse<PostResponse>>, StatusCode> {
@@ -167,25 +198,31 @@ pub async fn update_post(
         return Ok(Json(ApiResponse::error("Invalid input data")));
     }
 
-    // TODO: Replace with actual SeaORM database operations
-    if id != 1 {
-        return Ok(Json(ApiResponse::error("Post not found")));
+    // Update post in database
+    match PostRepository::update(&state.db, id, &payload).await {
+        Ok(Some(post)) => {
+            let response = PostResponse {
+                id: post.id,
+                title: post.title,
+                content: post.content,
+                user_id: post.user_id,
+                is_published: post.is_published,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
+
+            Ok(Json(ApiResponse::success(
+                response,
+                "Post updated successfully",
+            )))
+        }
+        Ok(None) => {
+            Ok(Json(ApiResponse::error("Post not found")))
+        }
+        Err(_) => {
+            Ok(Json(ApiResponse::error("Failed to update post")))
+        }
     }
-
-    let response = PostResponse {
-        id,
-        title: payload.title.unwrap_or_else(|| "Updated Post Title".to_string()),
-        content: payload.content.unwrap_or_else(|| "Updated content".to_string()),
-        user_id: 1,
-        is_published: payload.is_published.unwrap_or(true),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
-
-    Ok(Json(ApiResponse::success(
-        response,
-        "Post updated successfully",
-    )))
 }
 
 /// Delete post by ID
@@ -202,16 +239,22 @@ pub async fn update_post(
     tag = "Posts"
 )]
 pub async fn delete_post(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    // TODO: Replace with actual SeaORM database operations
-    if id != 1 {
-        return Ok(Json(ApiResponse::error("Post not found")));
+    // Delete post from database
+    match PostRepository::delete(&state.db, id).await {
+        Ok(true) => {
+            Ok(Json(ApiResponse::success(
+                "Post deleted".to_string(),
+                "Post deleted successfully",
+            )))
+        }
+        Ok(false) => {
+            Ok(Json(ApiResponse::error("Post not found")))
+        }
+        Err(_) => {
+            Ok(Json(ApiResponse::error("Failed to delete post")))
+        }
     }
-
-    Ok(Json(ApiResponse::success(
-        "Post deleted".to_string(),
-        "Post deleted successfully",
-    )))
 }
