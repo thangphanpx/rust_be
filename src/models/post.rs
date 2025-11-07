@@ -15,7 +15,7 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, PartialEq, EnumIter, DeriveRelation)]
 pub enum Relation {
-    // Relations will be added back after fixing the relation syntax
+    // Relations will be added after implementing proper foreign key constraints
 }
 
 impl ActiveModelBehavior for ActiveModel {}

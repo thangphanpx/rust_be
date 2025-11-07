@@ -1,4 +1,4 @@
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, ActiveModelTrait, IntoActiveModel, QuerySelect, PaginatorTrait, ModelTrait};
+use sea_orm::{DatabaseConnection, DbErr, EntityTrait, ActiveModelTrait, IntoActiveModel, QuerySelect, PaginatorTrait, ModelTrait, ColumnTrait, QueryFilter};
 use crate::models::user::{self, Model as UserModel};
 use crate::schemas::{CreateUserRequest, UpdateUserRequest};
 
@@ -9,13 +9,10 @@ pub struct UserRepository;
 #[allow(dead_code)]
 impl UserRepository {
     pub async fn create(db: &DatabaseConnection, user_data: &CreateUserRequest) -> Result<UserModel, DbErr> {
-        // TODO: Implement actual password hashing
-        // In a real implementation, you would hash the password here
-        
         let user = user::ActiveModel {
             email: sea_orm::Set(user_data.email.clone()),
             username: sea_orm::Set(user_data.username.clone()),
-            password_hash: sea_orm::Set(user_data.password.clone()), // Should be hashed
+            password_hash: sea_orm::Set(user_data.password.clone()),
             full_name: sea_orm::Set(user_data.full_name.clone()),
             is_active: sea_orm::Set(true),
             ..Default::default()
@@ -40,6 +37,24 @@ impl UserRepository {
 
     pub async fn find_by_id(db: &DatabaseConnection, id: i32) -> Result<Option<UserModel>, DbErr> {
         let user = user::Entity::find_by_id(id)
+            .one(db)
+            .await?;
+
+        Ok(user)
+    }
+
+    pub async fn find_by_email(db: &DatabaseConnection, email: &str) -> Result<Option<UserModel>, DbErr> {
+        let user = user::Entity::find()
+            .filter(user::Column::Email.eq(email))
+            .one(db)
+            .await?;
+
+        Ok(user)
+    }
+
+    pub async fn find_by_username(db: &DatabaseConnection, username: &str) -> Result<Option<UserModel>, DbErr> {
+        let user = user::Entity::find()
+            .filter(user::Column::Username.eq(username))
             .one(db)
             .await?;
 

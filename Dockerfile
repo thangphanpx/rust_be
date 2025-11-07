@@ -12,16 +12,14 @@ RUN apt-get update && apt-get install -y \
 
 # Copy manifest files
 COPY Cargo.toml ./
+COPY migration/Cargo.toml ./migration/
 
 # Copy source code
 COPY src ./src
-COPY migrations ./migrations
-
-# Copy SQLX query cache for offline builds
-COPY .sqlx ./.sqlx
+COPY migration/src ./migration/src
 
 # Build the application
-RUN cargo build --release
+RUN cargo build --release --bin rust_be
 
 # Runtime stage
 FROM debian:bookworm-slim

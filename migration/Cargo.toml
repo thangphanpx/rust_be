@@ -1,0 +1,15 @@
+[package]
+name = "migration"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "migration"
+path = "src/lib.rs"
+
+[dependencies]
+sea-orm = { path = "../", features = ["sqlx-postgres", "runtime-tokio-rustls", "chrono", "uuid", "macros"] }
+tokio = { version = "1.0", features = ["full"] }
+
+[dev-dependencies]
+tokio-test = "0.4"

@@ -2,12 +2,13 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde_json::json;
+use sea_orm::DbErr;
 use std::fmt;
 
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum AppError {
-    DatabaseError(sqlx::Error),
+    DatabaseError(DbErr),
     ValidationError(String),
     NotFound(String),
     Unauthorized(String),
@@ -28,8 +29,8 @@ impl fmt::Display for AppError {
 
 impl std::error::Error for AppError {}
 
-impl From<sqlx::Error> for AppError {
-    fn from(err: sqlx::Error) -> Self {
+impl From<DbErr> for AppError {
+    fn from(err: DbErr) -> Self {
         AppError::DatabaseError(err)
     }
 }
